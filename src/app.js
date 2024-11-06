@@ -10,7 +10,7 @@ app.use(express.json());
 app.use("/", helloRoutes);
 
 // Definir el puerto en el que el servidor escuchará
-const PORT = 8080;
+const PORT = 9090;
 
 // Inicializar el servidor y hacerlo escuchar en el puerto
 app.listen(PORT, () => {
