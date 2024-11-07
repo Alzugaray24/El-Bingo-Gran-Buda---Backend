@@ -11,7 +11,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, "Email es obligatorio"],
       unique: true,
-      lowercase: true, // Asegurarse de que el email esté en minúsculas
+      lowercase: true,
       validate: [
         validator.isEmail,
         "Por favor ingrese un correo electrónico válido",
@@ -20,7 +20,7 @@ const userSchema = new mongoose.Schema(
     fullName: {
       type: String,
       required: [true, "El nombre completo es obligatorio"],
-      trim: true, // Eliminar espacios innecesarios al inicio y al final
+      trim: true,
       minlength: [3, "El nombre completo debe tener al menos 3 caracteres"],
       maxlength: [100, "El nombre completo no debe exceder los 100 caracteres"],
     },
@@ -28,7 +28,15 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, "La contraseña es obligatoria"],
       minlength: [6, "La contraseña debe tener al menos 6 caracteres"],
-      select: false, // Evitar que la contraseña sea incluida en las consultas por defecto
+      select: false,
+    },
+    card: {
+      type: [[Number]], // Tarjetón bidimensional de números
+      required: true, // El tarjetón es obligatorio
+    },
+    markedNumbers: {
+      type: [[Boolean]], // Marca los números seleccionados en el tarjetón
+      default: () => Array(5).fill(Array(5).fill(false)), // Ejemplo para un tarjetón 5x5
     },
     createdAt: {
       type: Date,
@@ -45,11 +53,11 @@ const userSchema = new mongoose.Schema(
     },
     isActive: {
       type: Boolean,
-      default: true, // Indica si el usuario está activo o deshabilitado
+      default: true,
     },
   },
   {
-    timestamps: true, // Esto agregará `createdAt` y `updatedAt` automáticamente
+    timestamps: true,
   }
 );
 

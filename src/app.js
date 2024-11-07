@@ -4,6 +4,7 @@ import config from "./config/config.js";
 import MongoSingleton from "./db/database.js";
 import authRouter from "./routes/authRoutes.js";
 import configureWebSocket from "./socket/socket.js"; // Importamos la configuración de WebSockets
+import gamesRouter from "./routes/gameRouter.js";
 
 const app = express();
 
@@ -15,6 +16,7 @@ MongoSingleton.getInstance();
 
 // Rutas
 app.use("/auth", authRouter);
+app.use("/games", gamesRouter);
 
 // Definir el puerto en el que el servidor escuchará
 const PORT = config.port;
