@@ -1,10 +1,8 @@
 import mongoose from "mongoose";
 import validator from "validator";
 
-// Especificar la colección en la que se guardarán los usuarios.
 const collection = "users";
 
-// Definir el esquema de usuario con las validaciones correspondientes.
 const userSchema = new mongoose.Schema(
   {
     email: {
@@ -32,19 +30,11 @@ const userSchema = new mongoose.Schema(
     },
     card: {
       type: [[Number]], // Tarjetón bidimensional de números
-      required: true, // El tarjetón es obligatorio
+      required: true,
     },
     markedNumbers: {
       type: [[Boolean]], // Marca los números seleccionados en el tarjetón
-      default: () => Array(5).fill(Array(5).fill(false)), // Ejemplo para un tarjetón 5x5
-    },
-    createdAt: {
-      type: Date,
-      default: Date.now,
-    },
-    updatedAt: {
-      type: Date,
-      default: Date.now,
+      default: () => Array(5).fill(Array(5).fill(false)),
     },
     role: {
       type: String,
@@ -61,7 +51,7 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-// Crear el modelo de usuario
-const User = mongoose.model(collection, userSchema);
+// Aseguramos que solo se registre una vez el modelo
+const User = mongoose.models.User || mongoose.model("User", userSchema);
 
 export default User;

@@ -1,20 +1,28 @@
 import Game from "../models/Game.js";
+import mongoose from "mongoose";
+import User from "../models/User.js";
+
+// Servicio para obtener todos los juegos
+const viewGames = async () => {
+  const games = await Game.find(); // Busca todos los juegos
+  return games;
+};
 
 // Crear un nuevo juego
-export const createGame = async () => {
+const createGame = async () => {
   const game = new Game();
   return await game.save();
 };
 
 // Servicio para agregar un jugador al juego
-export const joinGame = async (gameId, userId) => {
+const joinGame = async (gameId, userId) => {
   // 1. Verificamos si el juego existe
   const game = await Game.findById(gameId);
   if (!game) {
     throw new Error("Game not found");
   }
 
-  // 2. Comprobamos si el jugador ya está en el juego
+  // 2. Comprobamos si el jugador ya está en el juego actual
   const existingPlayer = game.players.find(
     (player) => player.userId.toString() === userId.toString()
   );
@@ -22,28 +30,70 @@ export const joinGame = async (gameId, userId) => {
     throw new Error("Player is already in the game");
   }
 
-  // 4. Creamos el objeto para el jugador
+  // 3. Verificamos si el jugador ya está en otro juego
+  const existingGame = await Game.findOne({
+    "players.userId": userId,
+  });
+  if (existingGame) {
+    throw new Error("Player is already in another game");
+  }
+
+  // 4. Generamos la tarjeta 5x5 para el jugador
+  const card = generateBingoCard();
+
+  // 5. Actualizamos la tarjeta del jugador en el modelo de Usuario
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new Error("User not found");
+  }
+  user.card = card; // Asignamos la tarjeta generada al jugador
+  await user.save(); // Guardamos los cambios en el modelo de Usuario
+
+  // 6. Creamos el objeto para el jugador (sin la tarjeta)
   const player = {
     userId: userId, // Asumimos que el userId ya es un ObjectId válido
     markedBalls: [],
   };
 
-  // 5. Agregamos el jugador al juego
+  // 7. Agregamos el jugador al juego
   game.players.push(player);
 
-  // 6. Guardamos el juego actualizado
+  // 8. Guardamos el juego actualizado
   await game.save();
 
-  // 7. Retornamos el juego con el nuevo jugador agregado
+  // 9. Retornamos el juego con el nuevo jugador agregado
   return game;
 };
 
+// Función para generar una tarjeta 5x5 con números aleatorios
+const generateBingoCard = () => {
+  const card = [];
+  const numbers = Array.from({ length: 75 }, (_, index) => index + 1); // Números de 1 a 75
+
+  // Mezclar los números aleatoriamente
+  for (let i = numbers.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [numbers[i], numbers[j]] = [numbers[j], numbers[i]]; // Intercambiar
+  }
+
+  // Crear una tarjeta 5x5
+  for (let row = 0; row < 5; row++) {
+    card.push(numbers.splice(0, 5)); // Tomar 5 números por fila
+  }
+
+  return card;
+};
+
 // Iniciar el juego
-export const startGame = async (gameId) => {
+const startGame = async (gameId) => {
   const game = await Game.findById(gameId);
   if (!game) throw new Error("El juego no existe");
   if (game.gameStatus !== "esperando")
     throw new Error("El juego ya ha comenzado o ha finalizado");
+
+  if (game.players.length === 0) {
+    throw new Error("No es posible comenzar sin jugadores");
+  }
 
   game.gameStatus = "en curso";
   game.startDate = Date.now();
@@ -51,7 +101,7 @@ export const startGame = async (gameId) => {
 };
 
 // Sacar una balota
-export const drawBall = async (gameId) => {
+const drawBall = async (gameId) => {
   const game = await Game.findById(gameId);
   if (!game) throw new Error("El juego no existe");
   if (game.gameStatus !== "en curso")
@@ -67,7 +117,7 @@ export const drawBall = async (gameId) => {
 };
 
 // Finalizar el juego
-export const endGame = async (gameId) => {
+const endGame = async (gameId) => {
   const game = await Game.findById(gameId);
   if (!game) throw new Error("El juego no existe");
 
@@ -78,14 +128,27 @@ export const endGame = async (gameId) => {
 };
 
 // Marcar una balota en el tarjetón del usuario
-export const markBall = async (gameId, userId, ballNumber) => {
+const markBall = async (gameId, userId, ballNumber) => {
   const game = await Game.findById(gameId);
   if (!game) throw new Error("El juego no existe");
   if (game.gameStatus !== "en curso")
     throw new Error("El juego no está en curso");
 
-  const user = game.players.find((player) => player.userId === userId);
+  console.log(game.players);
+
+  // Encontrar al usuario dentro del juego
+  const user = game.players.find(
+    (player) =>
+      player.userId.toString() ===
+      new mongoose.Types.ObjectId(userId).toString()
+  );
+  console.log(user);
   if (!user) throw new Error("El usuario no está en el juego");
+
+  // Verificar si la balota existe en el conjunto de balotas del juego
+  if (!game.drawnBalls.includes(ballNumber)) {
+    throw new Error("La balota no ha sido sorteada aún");
+  }
 
   // Verificar si la balota ya fue marcada
   if (user.markedBalls.includes(ballNumber)) {
@@ -94,96 +157,76 @@ export const markBall = async (gameId, userId, ballNumber) => {
 
   // Marcar la balota
   user.markedBalls.push(ballNumber);
-  return await game.save();
+  await game.save();
+
+  return game;
 };
 
-// Verificar la condición de victoria de un usuario
-export const checkWinCondition = async (gameId, userId) => {
-  const game = await Game.findById(gameId);
-  if (!game) throw new Error("El juego no existe");
+// Función que verifica si un jugador ha ganado en su tarjeta
+const checkCardWinCondition = (markedNumbers) => {
+  // Verificar filas
+  for (let i = 0; i < 5; i++) {
+    if (markedNumbers[i].every((marked) => marked === true)) {
+      return true; // Ganó por fila
+    }
+  }
 
-  const user = game.players.find((player) => player.userId === userId);
-  if (!user) throw new Error("El usuario no está en el juego");
+  // Verificar columnas
+  for (let i = 0; i < 5; i++) {
+    if (markedNumbers.every((row) => row[i] === true)) {
+      return true; // Ganó por columna
+    }
+  }
 
-  const winCondition = checkCardWinCondition(user.markedBalls, game.userCard);
-  return winCondition;
+  // Verificar diagonal principal
+  if (markedNumbers.every((row, index) => row[index] === true)) {
+    return true; // Ganó por diagonal principal
+  }
+
+  // Verificar diagonal secundaria
+  if (markedNumbers.every((row, index) => row[4 - index] === true)) {
+    return true; // Ganó por diagonal secundaria
+  }
+
+  return false; // No ganó
 };
 
-// Lógica para verificar las condiciones de victoria del tarjetón
-const checkCardWinCondition = (markedBalls, userCard) => {
-  const size = userCard.length;
-  let isWinner = false;
-  let winType = "";
+// Función para verificar si un jugador ha ganado en el juego
+const checkWinCondition = async (gameId) => {
+  // Obtener el juego desde la base de datos
+  const game = await Game.findById(gameId).populate("players.userId");
 
-  // Función para verificar si una línea está completa (ya sea fila, columna o diagonal)
-  const isLineComplete = (line) => {
-    return line.every((ball) => ball === "free" || markedBalls.includes(ball));
-  };
+  // Comprobar las condiciones de victoria para cada jugador
+  for (const player of game.players) {
+    const user = player.userId; // El usuario que juega
+    const userCard = user.card; // El tarjetón del usuario
+    const markedNumbers = user.markedNumbers; // Los números marcados del usuario
 
-  // 1. Verificar Cartón Lleno (sin contar el centro libre)
-  const allBalls = userCard.flat().filter((ball) => ball !== "free");
-  if (allBalls.every((ball) => markedBalls.includes(ball))) {
-    isWinner = true;
-    winType = "cartón lleno";
-  }
+    console.log("aca", userCard);
 
-  // 2. Verificar Líneas Horizontales
-  if (!isWinner) {
-    for (let i = 0; i < size; i++) {
-      if (isLineComplete(userCard[i])) {
-        isWinner = true;
-        winType = "línea horizontal";
-        break;
-      }
-    }
-  }
+    // Verificar si el jugador ha ganado
+    if (checkCardWinCondition(userCard, markedNumbers)) {
+      // Actualizar el juego con el ganador
+      game.winner = user._id;
+      game.gameStatus = "finalizado";
+      game.endDate = new Date();
+      await game.save(); // Guardar los cambios en el juego
 
-  // 3. Verificar Líneas Verticales
-  if (!isWinner) {
-    for (let i = 0; i < size; i++) {
-      const column = userCard.map((row) => row[i]);
-      if (isLineComplete(column)) {
-        isWinner = true;
-        winType = "línea vertical";
-        break;
-      }
-    }
-  }
-
-  // 4. Verificar Diagonales
-  if (!isWinner) {
-    const diagonal1 = userCard.map((row, idx) => row[idx]); // Diagonal de arriba a abajo
-    const diagonal2 = userCard.map((row, idx) => row[size - 1 - idx]); // Diagonal de abajo a arriba
-    if (isLineComplete(diagonal1)) {
-      isWinner = true;
-      winType = "diagonal";
-    } else if (isLineComplete(diagonal2)) {
-      isWinner = true;
-      winType = "diagonal";
-    }
-  }
-
-  // 5. Verificar Esquinas
-  if (!isWinner) {
-    const corners = [
-      userCard[0][0], // esquina superior izquierda
-      userCard[0][size - 1], // esquina superior derecha
-      userCard[size - 1][0], // esquina inferior izquierda
-      userCard[size - 1][size - 1], // esquina inferior derecha
-    ];
-    if (corners.every((corner) => markedBalls.includes(corner))) {
-      isWinner = true;
-      winType = "esquinas";
+      return {
+        winner: user.fullName,
+        message: `${user.fullName} ha ganado el juego!`,
+      };
     }
   }
 
   return {
-    isWinner,
-    winType,
+    winner: null,
+    message: "El juego continúa. No hay ganador aún.",
   };
 };
 
 export default {
+  viewGames,
   createGame,
   joinGame,
   startGame,

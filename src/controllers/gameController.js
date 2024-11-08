@@ -1,5 +1,10 @@
-import { handleResponse } from "../utils/responseHandler.js";
+import { handleResponse } from "../utils/responseHandlerGame.js";
 import gameService from "../services/gameService.js";
+
+// Controlador para obtener todos los juegos
+export const viewGames = (req, res) => {
+  handleResponse(res, gameService.viewGames, []);
+};
 
 // Controlador para crear un nuevo juego
 export const createGame = (req, res) => {
@@ -10,8 +15,6 @@ export const createGame = (req, res) => {
 export const joinGame = (req, res) => {
   const { gameId } = req.params;
   const { userId } = req.body;
-  console.log(gameId);
-  console.log(userId);
   handleResponse(res, gameService.joinGame, [gameId, userId]);
 };
 
@@ -48,6 +51,7 @@ export const checkWinCondition = (req, res) => {
 };
 
 export default {
+  viewGames,
   createGame,
   joinGame,
   startGame,

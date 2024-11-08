@@ -14,7 +14,6 @@ export const handleResponse = async (
   successStatus = 200
 ) => {
   try {
-    console.log(console.log(serviceFunction));
     const result = await serviceFunction(...params);
     res.status(successStatus).json(result);
   } catch (error) {
