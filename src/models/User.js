@@ -28,14 +28,6 @@ const userSchema = new mongoose.Schema(
       minlength: [6, "La contraseña debe tener al menos 6 caracteres"],
       select: false,
     },
-    card: {
-      type: [[Number]], // Tarjetón bidimensional de números
-      required: true,
-    },
-    markedNumbers: {
-      type: [[Boolean]], // Marca los números seleccionados en el tarjetón
-      default: () => Array(5).fill(Array(5).fill(false)),
-    },
     role: {
       type: String,
       enum: ["user", "admin"],
@@ -51,7 +43,6 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-// Aseguramos que solo se registre una vez el modelo
 const User = mongoose.models.User || mongoose.model("User", userSchema);
 
 export default User;
