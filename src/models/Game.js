@@ -8,19 +8,19 @@ const gameSchema = new mongoose.Schema(
       {
         userId: {
           type: mongoose.Schema.Types.ObjectId,
-          ref: "User", // Asegúrate de que el modelo de 'User' esté bien definido
+          ref: "User",
           required: true,
         },
         card: {
-          type: [[Number]], // Tarjetón bidimensional de números
+          type: [[Number]],
           required: true,
         },
         markedNumbers: {
-          type: [[Boolean]], // Marca los números seleccionados en el tarjetón
+          type: [[Boolean]],
           default: () => Array(5).fill(Array(5).fill(false)),
         },
         markedBalls: {
-          type: [Number], // Array de números de balotas marcadas por el jugador
+          type: [Number],
           default: [],
         },
       },

@@ -1,31 +1,96 @@
 import { Server } from "socket.io";
+import gameService from "../services/gameService.js";
 
-// Configurar WebSocket
 const configureWebSocket = (server) => {
   const io = new Server(server, {
     cors: {
-      origin: "*", // Configura el origen según tus necesidades
+      origin: "*",
       methods: ["GET", "POST"],
+      allowedHeaders: ["Content-Type", "Authorization"],
+      credentials: true,
     },
   });
 
-  // Evento cuando un cliente se conecta
   io.on("connection", (socket) => {
-    console.log(`Nuevo cliente conectado con ID: ${socket.id}`);
-
-    // Emite un mensaje al cliente para verificar que todo funcione
-    socket.emit("server_message", "Conexión exitosa");
-
-    // Escuchar mensajes de los clientes
-    socket.on("message", (data) => {
-      console.log("Mensaje recibido del cliente:", data);
-      // Responder al cliente con un mensaje de éxito
-      socket.emit("response", "Mensaje procesado con éxito");
+    socket.on("viewGames", async () => {
+      try {
+        const games = await gameService.viewGames();
+        socket.emit("gamesList", games);
+      } catch (err) {
+        socket.emit("error", "No se pudieron obtener los juegos");
+      }
     });
 
-    // Evento cuando el cliente se desconecta
+    socket.on("createGame", async () => {
+      try {
+        const game = await gameService.createGame();
+        socket.emit("gameCreated", game);
+      } catch (err) {
+        socket.emit("error", "No se pudo crear el juego");
+      }
+    });
+
+    socket.on("joinGame", async (gameId, userId) => {
+      try {
+        const game = await gameService.joinGame(gameId, userId);
+        socket.join(gameId);
+        socket.emit("gameJoined", game);
+        io.to(gameId).emit("newPlayer", game);
+      } catch (err) {
+        socket.emit("error", err.message);
+      }
+    });
+
+    socket.on("startGame", async (gameId) => {
+      try {
+        const game = await gameService.startGame(gameId);
+        io.to(gameId).emit("gameStarted", game);
+      } catch (err) {
+        socket.emit("error", err.message);
+      }
+    });
+
+    socket.on("drawBall", async (gameId) => {
+      try {
+        const { newBall, game } = await gameService.drawBall(gameId);
+        io.to(gameId).emit("ballDrawn", { newBall, game });
+      } catch (err) {
+        socket.emit("error", err.message);
+      }
+    });
+
+    socket.on("markBall", async (gameId, userId, ballNumber) => {
+      try {
+        const game = await gameService.markBall(gameId, userId, ballNumber);
+        io.to(gameId).emit("ballMarked", game);
+      } catch (err) {
+        socket.emit("error", err.message);
+      }
+    });
+
+    socket.on("checkWinCondition", async (gameId, userId) => {
+      try {
+        const result = await gameService.checkWinCondition(gameId, userId);
+        socket.emit("winConditionChecked", result);
+        if (result.winner) {
+          io.to(gameId).emit("gameEnded", result);
+        }
+      } catch (err) {
+        socket.emit("error", err.message);
+      }
+    });
+
+    socket.on("endGame", async (gameId) => {
+      try {
+        const game = await gameService.endGame(gameId);
+        io.to(gameId).emit("gameEnded", game);
+      } catch (err) {
+        socket.emit("error", err.message);
+      }
+    });
+
     socket.on("disconnect", () => {
-      console.log(`Cliente ${socket.id} desconectado`);
+      // Manejar la desconexión del jugador si es necesario
     });
   });
 
