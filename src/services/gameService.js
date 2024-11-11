@@ -1,43 +1,37 @@
 import Game from "../models/Game.js";
 import {
   generateBingoCard,
-  checkCardWinCondition,
-} from "../utils/bingoUtils.js"; // Utilidades para la tarjeta y la condición de victoria
+  checkForWinningCondition,
+} from "../utils/bingoUtils.js";
 import mongoose from "mongoose";
 
 const gameService = {
-  // Obtener todos los juegos
   viewGames: async () => {
     return await Game.find({ isActive: true })
-      .select("players gameStatus startDate") // Selecciona solo los campos necesarios
-      .populate("players.userId", "username") // Pobla solo el nombre de usuario del jugador
-      .sort({ startDate: -1 }); // Ordena por fecha de inicio, más recientes primero
+      .select("players gameStatus startDate")
+      .populate("players.userId", "username")
+      .sort({ startDate: -1 });
   },
 
-  // Crear un nuevo juego
   createGame: async () => {
     try {
-      // Crear una nueva instancia del juego con los valores predeterminados
       const game = new Game({
-        gameStatus: "esperando", // El juego comienza en estado 'esperando'
-        drawnBalls: [], // Las bolas extraídas inicialmente vacías
-        players: [], // Lista vacía de jugadores al principio
+        gameStatus: "esperando",
+        drawnBalls: [],
+        players: [],
       });
 
-      // Guardar el juego en la base de datos
       const savedGame = await game.save();
 
-      // Crear un objeto con los detalles que deseas enviar
       const gameDetails = {
-        _id: savedGame._id.toString(), // ID del juego
-        gameStatus: savedGame.gameStatus, // Estado del juego
-        startDate: savedGame.startDate, // Fecha de inicio
-        players: savedGame.players, // Lista de jugadores
+        _id: savedGame._id.toString(),
+        gameStatus: savedGame.gameStatus,
+        startDate: savedGame.startDate,
+        players: savedGame.players,
       };
 
       console.log("Juego creado con éxito:", gameDetails);
 
-      // Devolver los detalles del juego
       return gameDetails;
     } catch (err) {
       console.error("Error al crear el juego:", err);
@@ -45,56 +39,69 @@ const gameService = {
     }
   },
 
-  // Unir a un jugador en un juego
   joinGame: async (gameId, userId) => {
-    // Buscar el juego en la base de datos utilizando directamente gameId
-    const game = await Game.findById(gameId);
-    if (!game) throw new Error("Game not found");
+    console.log("PITO");
 
-    // Verificar si el userId es válido
+    const game = await Game.findById(gameId);
+    if (!game) throw new Error("Juego no encontrado");
+
+    if (game.gameStatus === "en curso" || game.gameStatus === "finalizado") {
+      throw new Error(
+        "El juego ya está en curso, no se puede unir más jugadores."
+      );
+    }
+
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       throw new Error("userId no es válido");
     }
 
-    // Generar la tarjeta de Bingo para el jugador
+    const playerExists = game.players.some(
+      (player) => player.userId.toString() === userId
+    );
+    if (playerExists) {
+      throw new Error("El jugador ya está en la partida");
+    }
+
     const card = generateBingoCard();
 
-    // Crear un nuevo objeto jugador
     const player = {
-      userId: new mongoose.Types.ObjectId(userId), // Asegurarse de que el userId sea un ObjectId válido
+      userId: new mongoose.Types.ObjectId(userId),
       card: card,
       markedBalls: [],
     };
 
-    // Agregar al jugador al array de jugadores
     game.players.push(player);
 
-    // Guardar los cambios en la base de datos
     await game.save();
 
-    // Retornar el juego actualizado
     return game;
   },
 
-  // Iniciar el juego
   startGame: async (gameId) => {
     const game = await Game.findById(gameId);
-    if (!game) throw new Error("Game not found");
+    if (!game) throw new Error("Juego no encontrado");
     if (game.gameStatus !== "esperando")
-      throw new Error("Game already started");
+      throw new Error("El juego ya ha comenzado");
 
-    if (game.players.length === 0) throw new Error("No players in the game");
+    if (game.players.length === 0)
+      throw new Error("No hay jugadores en el juego");
 
     game.gameStatus = "en curso";
     game.startDate = Date.now();
     return await game.save();
   },
 
-  // Sacar una balota
   drawBall: async (gameId) => {
     const game = await Game.findById(gameId);
-    if (!game) throw new Error("Game not found");
-    if (game.gameStatus !== "en curso") throw new Error("Game not in progress");
+    if (!game) throw new Error("Juego no encontrado");
+
+    if (game.gameStatus !== "en curso") {
+      throw new Error("El juego no está en curso");
+    }
+
+    if (game.drawnBalls.length === 75) {
+      throw new Error("Ya se han sacado todas las bolas");
+    }
 
     let newBall;
     do {
@@ -103,32 +110,33 @@ const gameService = {
 
     game.drawnBalls.push(newBall);
     await game.save();
+
     return { newBall, game };
   },
 
-  // Marcar una balota en la tarjeta del jugador
   markBall: async (gameId, userId, ballNumber) => {
     const game = await Game.findById(gameId);
-    if (!game) throw new Error("Game not found");
-    if (game.gameStatus !== "en curso") throw new Error("Game not in progress");
+    if (!game) throw new Error("Juego no encontrado");
+    if (game.gameStatus !== "en curso")
+      throw new Error("El juego no está en curso");
 
     const player = game.players.find(
       (player) => player.userId.toString() === userId.toString()
     );
-    if (!player) throw new Error("Player not in the game");
+    if (!player) throw new Error("Jugador no encontrado en el juego");
 
     if (!game.drawnBalls.includes(ballNumber)) {
-      throw new Error("Ball not drawn");
+      throw new Error("La bola no ha sido sacada");
     }
 
     let numberFound = false;
     for (let i = 0; i < player.card.length; i++) {
       for (let j = 0; j < player.card[i].length; j++) {
         if (player.card[i][j] === ballNumber) {
-          if (player.markedBalls[i][j]) {
-            throw new Error("Ball already marked");
+          if (player.markedNumbers[i][j]) {
+            throw new Error("La bola ya está marcada");
           }
-          player.markedBalls[i][j] = true;
+          player.markedNumbers[i][j] = true;
           numberFound = true;
           break;
         }
@@ -137,50 +145,52 @@ const gameService = {
     }
 
     if (!numberFound) {
-      throw new Error("Ball not found on card");
+      throw new Error("La bola no se encuentra en el cartón");
     }
+
+    player.markedBalls.push(ballNumber);
 
     await game.save();
     return game;
   },
 
-  // Verificar la condición de victoria
   checkWinCondition: async (gameId, userId) => {
-    const game = await Game.findById(gameId).populate("players.userId");
-    if (!game) return { winner: null, message: "El juego no existe." };
+    try {
+      const game = await Game.findById(gameId);
+      if (!game) throw new Error("Juego no encontrado");
 
-    const player = game.players.find((p) => p.userId._id.toString() === userId);
-    if (!player)
-      return { winner: null, message: "El jugador no está en el juego." };
-
-    if (checkCardWinCondition(player.markedBalls)) {
-      game.winner = player.userId._id;
-      game.gameStatus = "finalizado";
-      game.endDate = Date.now();
-      await game.save();
-
-      return {
-        winner: player.userId.fullName,
-        message: `${player.userId.fullName} ha ganado el juego!`,
-      };
-    } else {
-      game.players = game.players.filter(
-        (p) => p.userId._id.toString() !== userId
+      const playerIndex = game.players.findIndex(
+        (p) => p.userId.toString() === userId.toString()
       );
+      if (playerIndex === -1)
+        throw new Error("Jugador no encontrado en el juego");
+
+      const player = game.players[playerIndex];
+
+      if (game.winner && game.winner.toString() === userId.toString()) {
+        return { winner: true, playerId: userId, game };
+      }
+
+      const hasWon = checkForWinningCondition(player.card, player.markedBalls);
+      if (hasWon) {
+        game.winner = player.userId;
+        await game.save();
+        return { winner: true, playerId: userId, game };
+      }
+
+      game.players.splice(playerIndex, 1);
+
       await game.save();
 
-      return {
-        winner: null,
-        message: `${player.userId.fullName} ha sido descalificado por intentar hacer trampa.`,
-        redirect: true, // indica que el frontend debe redirigir al jugador al home
-      };
+      return { winner: false, playerId: userId, removed: true, game };
+    } catch (err) {
+      throw new Error(err.message);
     }
   },
 
-  // Finalizar el juego
   endGame: async (gameId) => {
     const game = await Game.findById(gameId);
-    if (!game) throw new Error("Game not found");
+    if (!game) throw new Error("Juego no encontrado");
 
     game.gameStatus = "finalizado";
     game.endDate = Date.now();

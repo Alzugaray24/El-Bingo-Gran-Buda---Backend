@@ -1,53 +1,62 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import config from "../config/config.js";
-import { hashPassword, comparePasswords } from "../utils/utils.js"; // Si decides usar utils
+import { hashPassword, comparePasswords } from "../utils/utils.js";
 
-// Servicio para registrar un usuario
 export const registerUserService = async (email, fullName, password, role) => {
-  // Verificar si el usuario ya existe
-  const existingUser = await User.findOne({ email });
+  const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$/;
+  if (!emailRegex.test(email)) {
+    throw new Error("El correo electrónico no es válido");
+  }
 
+  const existingUser = await User.findOne({ email });
   if (existingUser) {
     throw new Error("El correo electrónico ya está registrado");
   }
 
-  // Encriptar la contraseña
+  if (fullName.length < 3) {
+    throw new Error("El nombre completo debe tener al menos 3 caracteres");
+  }
+
+  const passwordRegex =
+    /^(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{6,}$/;
+  if (!passwordRegex.test(password)) {
+    throw new Error(
+      "La contraseña debe tener al menos 6 caracteres, incluyendo 1 letra mayúscula, 1 número y 1 carácter especial"
+    );
+  }
+
   const hashedPassword = await hashPassword(password);
 
-  // Crear el nuevo usuario
   const newUser = new User({
     email,
     fullName,
     password: hashedPassword,
-    role,
   });
 
-  // Guardar el usuario en la base de datos
   await newUser.save();
 
-  // En lugar de devolver el token, puedes simplemente devolver un mensaje de éxito
   return { message: "Usuario registrado con éxito" };
 };
 
-// Servicio para iniciar sesión
 export const loginUserService = async (email, password) => {
-  // Buscar el usuario por correo
+  const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$/;
+  if (!emailRegex.test(email)) {
+    throw new Error("El correo electrónico no es válido");
+  }
+
   const user = await User.findOne({ email }).select("+password");
   if (!user) {
     throw new Error("Usuario no encontrado");
   }
 
-  // Comparar la contraseña
   const isMatch = await comparePasswords(password, user.password);
   if (!isMatch) {
     throw new Error("Contraseña incorrecta");
   }
 
-  // Generar un nuevo token JWT
   const payload = { userId: user._id };
   const token = jwt.sign(payload, config.jwt_secret, { expiresIn: "1h" });
 
-  // Devolver tanto el token como el userId
   return { token, userId: user._id };
 };

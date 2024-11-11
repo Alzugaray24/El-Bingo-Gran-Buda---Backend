@@ -24,7 +24,6 @@ export const handleAuthResponse = async (
 
     return res.status(successStatus).json(result);
   } catch (error) {
-    console.error("Error en handler:", error);
     res.status(error.status || 400).json({ message: error.message });
   }
 };

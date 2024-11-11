@@ -11,18 +11,41 @@ export const generateBingoCard = () => {
   return card;
 };
 
-export const checkCardWinCondition = (markedBalls) => {
-  const isRowComplete = (row) => row.every((cell) => cell === true);
-  const isColComplete = (col) => markedBalls.every((row) => row[col] === true);
+// Verificar si hay una fila ganadora
+const checkRow = (card, markedBalls) => {
+  return card.some((row) =>
+    row.every((number) => markedBalls.includes(number))
+  );
+};
 
-  for (let i = 0; i < 5; i++) {
-    if (isRowComplete(markedBalls[i]) || isColComplete(i)) return true;
+// Verificar si hay una columna ganadora
+const checkColumn = (card, markedBalls) => {
+  for (let col = 0; col < card[0].length; col++) {
+    if (card.every((row) => markedBalls.includes(row[col]))) {
+      return true;
+    }
   }
+  return false;
+};
 
-  const mainDiagonal = [0, 1, 2, 3, 4].every((i) => markedBalls[i][i] === true);
-  const antiDiagonal = [0, 1, 2, 3, 4].every(
-    (i) => markedBalls[i][4 - i] === true
+// Verificar si hay una diagonal ganadora
+const checkDiagonal = (card, markedBalls) => {
+  const mainDiagonal = card.map((row, index) => row[index]);
+  const secondaryDiagonal = card.map(
+    (row, index) => row[card.length - 1 - index]
   );
 
-  return mainDiagonal || antiDiagonal;
+  return (
+    mainDiagonal.every((number) => markedBalls.includes(number)) ||
+    secondaryDiagonal.every((number) => markedBalls.includes(number))
+  );
+};
+
+// Función para comprobar las condiciones de victoria (puede ser fila, columna o diagonal)
+export const checkForWinningCondition = (card, markedBalls) => {
+  return (
+    checkRow(card, markedBalls) ||
+    checkColumn(card, markedBalls) ||
+    checkDiagonal(card, markedBalls)
+  );
 };

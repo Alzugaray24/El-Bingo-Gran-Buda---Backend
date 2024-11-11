@@ -44,7 +44,7 @@ const configureWebSocket = (server) => {
     socket.on("startGame", async (gameId) => {
       try {
         const game = await gameService.startGame(gameId);
-        io.to(gameId).emit("gameStarted", game);
+        socket.emit("gameStarted", game);
       } catch (err) {
         socket.emit("error", err.message);
       }
@@ -53,7 +53,10 @@ const configureWebSocket = (server) => {
     socket.on("drawBall", async (gameId) => {
       try {
         const { newBall, game } = await gameService.drawBall(gameId);
-        io.to(gameId).emit("ballDrawn", { newBall, game });
+
+        console.log(newBall);
+        console.log(game);
+        socket.emit("ballDrawn", { newBall, game });
       } catch (err) {
         socket.emit("error", err.message);
       }
@@ -62,8 +65,9 @@ const configureWebSocket = (server) => {
     socket.on("markBall", async (gameId, userId, ballNumber) => {
       try {
         const game = await gameService.markBall(gameId, userId, ballNumber);
-        io.to(gameId).emit("ballMarked", game);
+        socket.emit("ballMarked", game);
       } catch (err) {
+        console.log(err);
         socket.emit("error", err.message);
       }
     });
@@ -82,6 +86,7 @@ const configureWebSocket = (server) => {
 
     socket.on("endGame", async (gameId) => {
       try {
+        console.log("entre");
         const game = await gameService.endGame(gameId);
         io.to(gameId).emit("gameEnded", game);
       } catch (err) {
